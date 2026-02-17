@@ -1,21 +1,26 @@
-name: Build APK (Ubuntu 22.04 Fix)
+name: Final Ultimate Build
 on:
   push:
     branches: [ "main", "master" ]
 
 jobs:
   build:
-    # تغییر مهم: استفاده از نسخه پایدار 22.04 برای رفع خطای autoconf
     runs-on: ubuntu-22.04
 
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
 
-      # ۱. اصلاح خودکار کد پایتون (چون فایل شما ناقص بود)
-      - name: Fix Python Code
+      # ۱. پاکسازی محیط و اصلاح فایل‌های معیوب
+      - name: Clean and Fix Files
         run: |
-          # ساخت مجدد فایل main.py با کد صحیح و کامل
+          # حذف فایل تنظیمات مزاحم که باعث ارور قبلی شد
+          rm -f buildozer.spec
+          
+          # حذف فایل پایتون ناقص کاربر
+          rm -f mycalculator.py
+          
+          # ساخت فایل main.py جدید و اصلاح شده (برای جلوگیری از کرش روی گوشی)
           cat > main.py <<EOF
           import kivy
           from kivy.app import App
@@ -23,11 +28,12 @@ jobs:
           from kivy.properties import ObjectProperty
 
           class MainLayout(GridLayout):
-              display = ObjectProperty(None)
+              display = ObjectProperty(None)  # این خط حیاتی بود که در کد شما نبود
 
               def calc(self, event):
                   if event:
                       try:
+                          # محاسبه عبارت ریاضی
                           self.display.text = str(eval(event))
                       except Exception:
                           self.display.text = "Error"
@@ -40,25 +46,23 @@ jobs:
               MyCalculatorApp().run()
           EOF
           
-          # حذف فایل قدیمی اگر هست
-          rm -f mycalculator.py
-          echo "Python code fixed and renamed to main.py"
+          echo "Fixed python code and removed old config files."
 
       # ۲. نصب جاوا ۱۷
-      - name: Set up JDK 17
+      - name: Setup Java
         uses: actions/setup-java@v3
         with:
-          java-version: '17'
           distribution: 'temurin'
+          java-version: '17'
 
       # ۳. نصب پایتون
-      - name: Set up Python
+      - name: Setup Python
         uses: actions/setup-python@v4
         with:
           python-version: '3.10'
 
-      # ۴. نصب وابستگی‌ها (اضافه شدن libltdl-dev برای رفع ارور شما)
-      - name: Install Dependencies
+      # ۴. نصب کتابخانه‌های ضروری لینوکس
+      - name: Install System Dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y build-essential git python3-dev \
@@ -68,32 +72,38 @@ jobs:
           automake libtool pkg-config libffi-dev libssl-dev \
           libltdl-dev libncurses5-dev zip unzip
 
-      # ۵. نصب بیلدوزر
+      # ۵. نصب ابزار بیلدوزر
       - name: Install Buildozer
         run: |
           pip install --upgrade pip
           pip install buildozer cython==0.29.33
 
-      # ۶. تنظیم فایل spec
-      - name: Configure Buildozer
+      # ۶. ساخت تنظیمات جدید (بدون خطا چون فایل قبلی پاک شده)
+      - name: Configure Spec
         run: |
           buildozer init
+          
+          # تنظیم نام برنامه و پکیج
           sed -i 's/title = My Application/title = Calculator/' buildozer.spec
           sed -i 's/package.name = myapp/package.name = mycalculator/' buildozer.spec
-          sed -i 's/requirements = python3,kivy/requirements = python3,kivy/' buildozer.spec
-          # تایید لایسنس
+          
+          # تنظیمات حیاتی لایسنس گوگل
           sed -i 's/#android.accept_sdk_license = False/android.accept_sdk_license = True/' buildozer.spec
-          # تغییر معماری برای سرعت بیشتر (فقط arm64)
-          sed -i 's/#android.archs = arm64-v8a, armeabi-v7a/android.archs = arm64-v8a/' buildozer.spec
+          
+          # تنظیم پسوندهای مجاز (اضافه کردن kv)
+          sed -i 's/source.include_exts = py,png,jpg,kv,atlas/source.include_exts = py,png,jpg,kv,atlas/' buildozer.spec
+          
+          # تنظیم نسخه پایتون و کیوی
+          sed -i 's/requirements = python3,kivy/requirements = python3,kivy/' buildozer.spec
 
-      # ۷. ساخت APK
+      # ۷. شروع عملیات ساخت (حدود ۱۵ دقیقه)
       - name: Build APK
         run: |
           yes | buildozer -v android debug
 
-      # ۸. آپلود فایل نهایی
-      - name: Upload Artifact
+      # ۸. تحویل فایل نهایی
+      - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: calculator-apk
+          name: Final-Calculator-APK
           path: bin/*.apk
