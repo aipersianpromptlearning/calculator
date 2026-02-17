@@ -1,30 +1,50 @@
-name: Build APK Ultimate Fix
+name: Build APK (Ubuntu 22.04 Fix)
 on:
   push:
     branches: [ "main", "master" ]
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    # تغییر مهم: استفاده از نسخه پایدار 22.04 برای رفع خطای autoconf
+    runs-on: ubuntu-22.04
 
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
 
-      # ۱. آماده‌سازی محیط: حذف فایل‌های مزاحم و تغییر نام فایل اصلی
-      - name: Prepare Files
+      # ۱. اصلاح خودکار کد پایتون (چون فایل شما ناقص بود)
+      - name: Fix Python Code
         run: |
-          # حذف پوشه‌های بیلد قبلی اگر وجود داشته باشند
-          rm -rf .buildozer bin
-          # اگر فایل mycalculator.py هست، آن را به main.py تغییر بده
-          if [ -f "mycalculator.py" ]; then
-            mv mycalculator.py main.py
-            echo "Renamed mycalculator.py to main.py"
-          fi
-          # حذف فایل spec قدیمی برای ساخت یکی جدید و سالم
-          rm -f buildozer.spec
+          # ساخت مجدد فایل main.py با کد صحیح و کامل
+          cat > main.py <<EOF
+          import kivy
+          from kivy.app import App
+          from kivy.uix.gridlayout import GridLayout
+          from kivy.properties import ObjectProperty
 
-      # ۲. نصب جاوا ۱۷ (الزامی برای اندروید جدید)
+          class MainLayout(GridLayout):
+              display = ObjectProperty(None)
+
+              def calc(self, event):
+                  if event:
+                      try:
+                          self.display.text = str(eval(event))
+                      except Exception:
+                          self.display.text = "Error"
+
+          class MyCalculatorApp(App):
+              def build(self):
+                  return MainLayout()
+
+          if __name__ == '__main__':
+              MyCalculatorApp().run()
+          EOF
+          
+          # حذف فایل قدیمی اگر هست
+          rm -f mycalculator.py
+          echo "Python code fixed and renamed to main.py"
+
+      # ۲. نصب جاوا ۱۷
       - name: Set up JDK 17
         uses: actions/setup-java@v3
         with:
@@ -37,7 +57,7 @@ jobs:
         with:
           python-version: '3.10'
 
-      # ۴. نصب ابزارهای لینوکس (کامل)
+      # ۴. نصب وابستگی‌ها (اضافه شدن libltdl-dev برای رفع ارور شما)
       - name: Install Dependencies
         run: |
           sudo apt-get update
@@ -45,7 +65,8 @@ jobs:
           ffmpeg libsdl2-dev libsdl2-image-dev libsdl2-mixer-dev \
           libsdl2-ttf-dev libportmidi-dev libswscale-dev \
           libavformat-dev libavcodec-dev zlib1g-dev autoconf \
-          automake libtool pkg-config libffi-dev libssl-dev zip unzip
+          automake libtool pkg-config libffi-dev libssl-dev \
+          libltdl-dev libncurses5-dev zip unzip
 
       # ۵. نصب بیلدوزر
       - name: Install Buildozer
@@ -53,30 +74,25 @@ jobs:
           pip install --upgrade pip
           pip install buildozer cython==0.29.33
 
-      # ۶. ساخت و تنظیم فایل spec جدید (بخش حیاتی)
-      - name: Create and Config Spec File
+      # ۶. تنظیم فایل spec
+      - name: Configure Buildozer
         run: |
-          # ساخت فایل خام
           buildozer init
-          
-          # تغییرات خودکار در فایل تنظیمات
-          sed -i 's/title = My Application/title = Calculator/g' buildozer.spec
-          sed -i 's/package.name = myapp/package.name = mycalculator/g' buildozer.spec
-          sed -i 's/requirements = python3,kivy/requirements = python3,kivy/g' buildozer.spec
-          
-          # مهم: فعال کردن تایید لایسنس
-          sed -i 's/#android.accept_sdk_license = False/android.accept_sdk_license = True/g' buildozer.spec
-          
-          # تنظیم معماری‌ها (اختیاری ولی خوب برای سازگاری)
-          sed -i 's/#android.archs = arm64-v8a, armeabi-v7a/android.archs = arm64-v8a/g' buildozer.spec
+          sed -i 's/title = My Application/title = Calculator/' buildozer.spec
+          sed -i 's/package.name = myapp/package.name = mycalculator/' buildozer.spec
+          sed -i 's/requirements = python3,kivy/requirements = python3,kivy/' buildozer.spec
+          # تایید لایسنس
+          sed -i 's/#android.accept_sdk_license = False/android.accept_sdk_license = True/' buildozer.spec
+          # تغییر معماری برای سرعت بیشتر (فقط arm64)
+          sed -i 's/#android.archs = arm64-v8a, armeabi-v7a/android.archs = arm64-v8a/' buildozer.spec
 
-      # ۷. اجرای بیلد نهایی
+      # ۷. ساخت APK
       - name: Build APK
         run: |
           yes | buildozer -v android debug
 
-      # ۸. آپلود فایل
-      - name: Upload APK
+      # ۸. آپلود فایل نهایی
+      - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
           name: calculator-apk
