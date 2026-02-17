@@ -1,5 +1,5 @@
 [app]
-title = My Calculator
+title = Aso Calculator
 package.name = mycalc
 package.domain = org.test
 source.dir = .
@@ -16,3 +16,5 @@ android.minapi = 21
 android.ndk = 25b
 android.accepted_use_kivy_build = True
 p4a.branch = master
+icon.filename = icon.png
+presplash.filename = icon.png
