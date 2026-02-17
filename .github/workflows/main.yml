@@ -1,4 +1,4 @@
-name: Build APK Final
+name: Build APK Ultimate Fix
 on:
   push:
     branches: [ "main", "master" ]
@@ -11,13 +11,20 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v4
 
-      # ۱. تمیزکاری فایل‌های مزاحم احتمالی
-      - name: Cleanup
+      # ۱. آماده‌سازی محیط: حذف فایل‌های مزاحم و تغییر نام فایل اصلی
+      - name: Prepare Files
         run: |
-          rm -rf .buildozer
-          rm -rf bin
+          # حذف پوشه‌های بیلد قبلی اگر وجود داشته باشند
+          rm -rf .buildozer bin
+          # اگر فایل mycalculator.py هست، آن را به main.py تغییر بده
+          if [ -f "mycalculator.py" ]; then
+            mv mycalculator.py main.py
+            echo "Renamed mycalculator.py to main.py"
+          fi
+          # حذف فایل spec قدیمی برای ساخت یکی جدید و سالم
+          rm -f buildozer.spec
 
-      # ۲. نصب جاوا ۱۷ (بسیار مهم برای بیلدوزر جدید)
+      # ۲. نصب جاوا ۱۷ (الزامی برای اندروید جدید)
       - name: Set up JDK 17
         uses: actions/setup-java@v3
         with:
@@ -30,32 +37,15 @@ jobs:
         with:
           python-version: '3.10'
 
-      # ۴. نصب وابستگی‌های سیستمی لینوکس (کامل‌تر شده)
-      - name: Install System Dependencies
+      # ۴. نصب ابزارهای لینوکس (کامل)
+      - name: Install Dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y \
-            build-essential \
-            git \
-            python3-dev \
-            ffmpeg \
-            libsdl2-dev \
-            libsdl2-image-dev \
-            libsdl2-mixer-dev \
-            libsdl2-ttf-dev \
-            libportmidi-dev \
-            libswscale-dev \
-            libavformat-dev \
-            libavcodec-dev \
-            zlib1g-dev \
-            autoconf \
-            automake \
-            libtool \
-            pkg-config \
-            libffi-dev \
-            libssl-dev \
-            zip \
-            unzip
+          sudo apt-get install -y build-essential git python3-dev \
+          ffmpeg libsdl2-dev libsdl2-image-dev libsdl2-mixer-dev \
+          libsdl2-ttf-dev libportmidi-dev libswscale-dev \
+          libavformat-dev libavcodec-dev zlib1g-dev autoconf \
+          automake libtool pkg-config libffi-dev libssl-dev zip unzip
 
       # ۵. نصب بیلدوزر
       - name: Install Buildozer
@@ -63,13 +53,29 @@ jobs:
           pip install --upgrade pip
           pip install buildozer cython==0.29.33
 
-      # ۶. اجرای بیلد (با تنظیمات رفع باگ)
-      - name: Build with Buildozer
+      # ۶. ساخت و تنظیم فایل spec جدید (بخش حیاتی)
+      - name: Create and Config Spec File
         run: |
-          # دستور yes برای تایید همه سوالات
-          yes | buildozer android debug
+          # ساخت فایل خام
+          buildozer init
+          
+          # تغییرات خودکار در فایل تنظیمات
+          sed -i 's/title = My Application/title = Calculator/g' buildozer.spec
+          sed -i 's/package.name = myapp/package.name = mycalculator/g' buildozer.spec
+          sed -i 's/requirements = python3,kivy/requirements = python3,kivy/g' buildozer.spec
+          
+          # مهم: فعال کردن تایید لایسنس
+          sed -i 's/#android.accept_sdk_license = False/android.accept_sdk_license = True/g' buildozer.spec
+          
+          # تنظیم معماری‌ها (اختیاری ولی خوب برای سازگاری)
+          sed -i 's/#android.archs = arm64-v8a, armeabi-v7a/android.archs = arm64-v8a/g' buildozer.spec
 
-      # ۷. آپلود فایل نهایی
+      # ۷. اجرای بیلد نهایی
+      - name: Build APK
+        run: |
+          yes | buildozer -v android debug
+
+      # ۸. آپلود فایل
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
