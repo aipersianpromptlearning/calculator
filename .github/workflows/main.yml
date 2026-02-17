@@ -95,6 +95,8 @@ jobs:
           
           # تنظیم نسخه پایتون و کیوی
           sed -i 's/requirements = python3,kivy/requirements = python3,kivy/' buildozer.spec
+          # x64
+          sed -i 's/#android.archs = arm64-v8a, armeabi-v7a/android.archs = arm64-v8a/' buildozer.spec
 
       # ۷. شروع عملیات ساخت (حدود ۱۵ دقیقه)
       - name: Build APK
